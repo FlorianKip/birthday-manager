@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geburtstagsmanager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    :root {
+      --primary-color: #0078d7;
+      --background: #f0f4f8;
+    }
+    [data-theme="dark"] {
+      --background: #1a1a1a;
+      --primary-color: #4fa3ff;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes giftPop {
+      0% { transform: scale(1) rotate(0deg); }
+      50% { transform: scale(1.3) rotate(10deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+    .card {
+      animation: slideIn 0.5s ease-out forwards;
+      transition: border-color 0.3s ease, background-color 0.3s ease;
+    }
+    .gift-emoji {
+      transition: transform 0.3s ease, color 0.3s ease;
+      font-size: 1.5rem;
+    }
+    .gift-emoji:hover {
+      transform: scale(1.1);
+    }
+    .gift-emoji.checked {
+      animation: giftPop 0.3s ease;
+    }
+    @media (max-width: 768px) {
+      .text-xl { font-size: 1.25rem; }
+      .text-sm { font-size: 0.875rem; }
+      .p-6 { padding: 1rem; }
+      .mb-4 { margin-bottom: 1rem; }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    }
+    .timeline-container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      padding: 0.5rem 0;
+      position: relative;
+    }
+    .timeline {
+      display: flex;
+      overflow-x: auto;
+      padding: 1rem 0;
+      gap: 1rem;
+      justify-content: flex-start;
+      width: 100%;
+      scroll-behavior: smooth;
+    }
+    .timeline-item {
+      flex: 0 0 auto;
+      padding: 0.5rem 1rem;
+      background-color: #3b82f6;
+      border-radius: 0.5rem;
+      text-align: center;
+      min-width: 120px;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      cursor: pointer;
+    }
+    .timeline-item.highlight {
+      background-color: #00ab39;
+      color: white;
+    }
+    .scroll-arrow {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      display: none;
+      z-index: 10; /* Ensure arrows are above timeline items */
+    }
+    .scroll-arrow.show {
+      display: flex;
+    }
+    .scroll-arrow-left {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      display: none;
+      z-index: 10; /* Ensure arrows are above timeline items */
+    }
+    .scroll-arrow-left.show {
+      display: flex;
+    }
+
+    /* Styles for the new search suggestions dropdown */
+    .suggestions-dropdown {
+      position: absolute;
+      top: calc(100% + 8px); /* Position slightly below the search input, adding some space */
+      left: 0;
+      right: 0;
+      background-color: white;
+      border: 1px solid #cbd5e0; /* Light gray border */
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Stronger shadow for depth */
+      z-index: 20; /* Ensure it's above other content */
+      max-height: 250px; /* Limit height for scrollability */
+      overflow-y: auto;
+      display: none; /* Hidden by default */
+      transition: opacity 0.2s ease-in-out; /* Smooth fade in/out */
+      opacity: 0;
+    }
+
+    .suggestions-dropdown.show {
+      opacity: 1;
+    }
+
+    .dark .suggestions-dropdown {
+      background-color: #2d3748; /* Darker background for dark mode */
+      border-color: #4a5568; /* Darker border */
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); /* Darker shadow */
+    }
+
+    .suggestion-category-title {
+      padding: 0.5rem 1rem 0.25rem; /* Adjusted padding */
+      font-weight: 700; /* Bolder title */
+      color: #6b7280; /* Gray color */
+      font-size: 0.8rem; /* Slightly smaller font for title */
+      text-transform: uppercase;
+      letter-spacing: 0.05em; /* Add some letter spacing */
+      border-bottom: 1px solid #edf2f7; /* Subtle separator */
+      margin-top: 0.5rem; /* Space above category title */
+    }
+
+    .dark .suggestion-category-title {
+      color: #9ca3af;
+      border-bottom-color: #4a5568; /* Dark mode separator */
+    }
+
+    .suggestion-item {
+      padding: 0.6rem 1rem; /* Slightly less vertical padding */
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+      font-size: 0.95rem; /* Slightly smaller text for items */
+      color: #374151; /* Darker text for better contrast */
+    }
+
+    .suggestion-item:hover {
+      background-color: #e2e8f0; /* Lighter hover background */
+      color: #1a202c; /* Darker text on hover */
+    }
+
+    .dark .suggestion-item {
+      color: #e2e8f0; /* Lighter text for dark mode */
+    }
+
+    .dark .suggestion-item:hover {
+      background-color: #4a5568; /* Dark mode hover background */
+      color: #f7fafc; /* Lighter text on hover */
+    }
+
+    /* Style for the emoji in suggestions */
+    .suggestion-item .emoji {
+      margin-right: 0.5rem;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300" data-theme="auto">
+
+  <div class="container mx-auto px-4 py-8 max-w-3xl">
+    <header class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-900 py-4">
+      <div class="timeline-container" id="timeline-container">
+        <button class="scroll-arrow-left" id="scroll-arrow-left">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div class="timeline" id="timeline"></div>
+        <button class="scroll-arrow" id="scroll-arrow-right">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+      <div class="mb-6">
+        <div class="relative">
+          <input type="text" id="search" placeholder="Nach Name, Eltern oder Monat suchen..."
+            class="w-full p-3 pl-3 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all duration-200"
+            aria-label="Suche nach Geburtstagen" autocomplete="off">
+          <button id="clear-search" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden">
+            <div class="flex items-center justify-center w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          </button>
+          <div id="suggestions-dropdown" class="suggestions-dropdown"></div>
+        </div>
+      </div>
+    </header>
+    <div id="list" class="space-y-4"></div>
+  </div>
+
+<div id="toast" class="hidden fixed bottom-4 left-4 bg-green-500 text-white p-4 rounded-lg shadow-lg transition-all duration-300 flex items-center gap-2">
+  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+  </svg>
+  <span id="toast-message">Aktion erfolgreich!</span>
+</div>
+    <button onclick="scrollToTop()" id="backToTopBtn" title="Nach oben" class="fixed bottom-8 right-8 bg-blue-600 text-white p-3 rounded-full shadow-lg hidden">
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+  </svg>
+</button>
+
+<script>
+document.getElementById('scroll-arrow-left').addEventListener('click', function() {
+  const timeline = document.getElementById('timeline');
+  timeline.scrollTo({
+    left: 0,
+    behavior: 'smooth'
+  });
+});
+
+document.getElementById('scroll-arrow-right').addEventListener('click', function() {
+  const timeline = document.getElementById('timeline');
+  timeline.scrollTo({
+    left: timeline.scrollWidth,
+    behavior: 'smooth'
+  });
+});
+
+
+document.getElementById('timeline').addEventListener('scroll', function() {
+  const scrollArrowLeft = document.getElementById('scroll-arrow-left');
+
+  if (this.scrollLeft > 0) {
+    scrollArrowLeft.classList.add('show');
+  } else {
+    scrollArrowLeft.classList.remove('show');
+  }
+});
+
+  function scrollToTop() {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+
+  window.onscroll = function() {
+    const backToTopBtn = document.getElementById("backToTopBtn");
+    if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+      backToTopBtn.classList.remove("hidden");
+    } else {
+      backToTopBtn.classList.add("hidden");
+    }
+  };
+let birthdays = JSON.parse(localStorage.getItem('birthdays')) || [
+  {"Name":"Theodore","Geburtstag":"2012-03-19","Alter":13,"Eltern":"Tim & Anja","Gender":"M","Tage":304},
+  {"Name":"Abigail","Geburtstag":"2013-12-21","Alter":11,"Eltern":"Tim & Anja","Gender":"F","Tage":215},
+  {"Name":"Olivia","Geburtstag":"2014-07-03","Alter":10,"Eltern":"Daniel & Daniela","Gender":"F","Tage":44},
+  {"Name":"Lotta","Geburtstag":"2014-11-30","Alter":10,"Eltern":"Manuel & Irina","Gender":"F","Tage":194},
+  {"Name":"Leo","Geburtstag":"2015-06-30","Alter":9,"Eltern":"Tim & Anja","Gender":"M","Tage":41},
+  {"Name":"Adam","Geburtstag":"2016-04-21","Alter":9,"Eltern":"Daniel & Daniela","Gender":"M","Tage":336},
+  {"Name":"Henry","Geburtstag":"2016-05-09","Alter":9,"Eltern":"Manuel & Irina","Gender":"M","Tage":354},
+  {"Name":"Mira","Geburtstag":"2016-05-20","Alter":9,"Eltern":"Tomy & Sabine","Gender":"F","Tage":0},
+  {"Name":"Sofie","Geburtstag":"2016-05-26","Alter":9,"Eltern":"Martin & Ulrike","Gender":"F","Tage":6},
+  {"Name":"Niklas","Geburtstag":"2017-05-15","Alter":8,"Eltern":"Tim & Anja","Gender":"M","Tage":360},
+  {"Name":"Joel","Geburtstag":"2017-08-16","Alter":7,"Eltern":"Ronald & Julia","Gender":"M","Tage":88},
+  {"Name":"Tabea","Geburtstag":"2017-11-30","Alter":7,"Eltern":"Daniel & Daniela","Gender":"F","Tage":194},
+  {"Name":"Anton","Geburtstag":"2019-01-18","Alter":6,"Eltern":"Martin & Ulrike","Gender":"M","Tage":243},
+  {"Name":"Theo","Geburtstag":"2018-05-15","Alter":7,"Eltern":"Tomy & Sabine","Gender":"M","Tage":360},
+  {"Name":"Katy","Geburtstag":"2019-06-23","Alter":5,"Eltern":"Manuel & Irina","Gender":"F","Tage":34},
+  {"Name":"Julius","Geburtstag":"2019-07-06","Alter":5,"Eltern":"Tim & Anja","Gender":"M","Tage":47},
+  {"Name":"Bella","Geburtstag":"2020-06-03","Alter":4,"Eltern":"Tomy & Sabine","Gender":"F","Tage":14},
+  {"Name":"Elia","Geburtstag":"2020-02-15","Alter":5,"Eltern":"Ronald & Julia","Gender":"M","Tage":271},
+  {"Name":"Joschi","Geburtstag":"2020-09-06","Alter":4,"Eltern":"Daniel & Daniela","Gender":"M","Tage":109},
+  {"Name":"George","Geburtstag":"2021-11-05","Alter":3,"Eltern":"Tim & Anja","Gender":"M","Tage":169},
+  {"Name":"Matheo","Geburtstag":"2021-11-25","Alter":3,"Eltern":"Manuel & Irina","Gender":"M","Tage":189},
+  {"Name":"Ben","Geburtstag":"2022-04-12","Alter":3,"Eltern":"Martin & Ulrike","Gender":"M","Tage":327},
+  {"Name":"Levi","Geburtstag":"2022-06-16","Alter":2,"Eltern":"Florian & Christina","Gender":"M","Tage":27},
+  {"Name":"Salome","Geburtstag":"2023-07-09","Alter":1,"Eltern":"Ronald & Julia","Gender":"F","Tage":50},
+  {"Name":"Thilda","Geburtstag":"2024-05-29","Alter":0,"Eltern":"Tomy & Sabine","Gender":"F","Tage":9},
+  {"Name":"Nick","Geburtstag":"2024-12-05","Alter":0,"Eltern":"Martin & Ulrike","Gender":"M","Tage":199},
+  {"Name":"David","Geburtstag":"2024-12-11","Alter":0,"Eltern":"Daniel & Daniela","Gender":"M","Tage":205},
+
+  // --- Hier die neuen Einträge ---
+  {"Name":"Tim","Geburtstag":"1985-07-21","Alter":54,"Eltern":"Mama & Papa","Gender":"M","Tage":62},
+  {"Name":"Anja","Geburtstag":"1984-10-02","Alter":54,"Eltern":"Mama & Papa","Gender":"F","Tage":135},
+  {"Name":"Daniel","Geburtstag":"1989-04-03","Alter":36,"Eltern":"Mama & Papa","Gender":"M","Tage":318},
+  {"Name":"Daniela","Geburtstag":"1991-03-20","Alter":34,"Eltern":"Mama & Papa","Gender":"F","Tage":304},
+  {"Name":"Manuel","Geburtstag":"1989-04-03","Alter":36,"Eltern":"Mama & Papa","Gender":"M","Tage":318},
+  {"Name":"Irina","Geburtstag":"1986-03-28","Alter":39,"Eltern":"Mama & Papa","Gender":"F","Tage":312},
+  {"Name":"Martin","Geburtstag":"1990-06-01","Alter":34,"Eltern":"Mama & Papa","Gender":"M","Tage":12},
+  {"Name":"Ulrike","Geburtstag":"1994-07-13","Alter":30,"Eltern":"Mama & Papa","Gender":"F","Tage":54},
+  {"Name":"Tomy","Geburtstag":"1992-08-07","Alter":32,"Eltern":"Mama & Papa","Gender":"M","Tage":79},
+  {"Name":"Sabine","Geburtstag":"1996-08-08","Alter":28,"Eltern":"Mama & Papa","Gender":"F","Tage":80},
+  {"Name":"Ronald","Geburtstag":"1995-08-11","Alter":29,"Eltern":"Mama & Papa","Gender":"M","Tage":83},
+  {"Name":"Julia","Geburtstag":"1995-02-13","Alter":30,"Eltern":"Mama & Papa","Gender":"F","Tage":269},
+  {"Name":"Florian","Geburtstag":"1999-07-05","Alter":25,"Eltern":"Mama & Papa","Gender":"M","Tage":46},
+  {"Name":"Christina","Geburtstag":"1999-09-21","Alter":25,"Eltern":"Mama & Papa","Gender":"F","Tage":124},
+  {"Name":"Mama","Geburtstag":"1961-07-24","Alter":54,"Eltern":"Mama & Papa","Gender":"F","Tage":65},
+  {"Name":"Papa","Geburtstag":"1962-05-13","Alter":55,"Eltern":"Mama & Papa","Gender":"M","Tage":358}
+];
+
+function calculateDays(birthday) {
+  const today = new Date();
+  const birthDate = new Date(birthday);
+  const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+  if (nextBirthday < today) nextBirthday.setFullYear(today.getFullYear() + 1);
+  const diffTime = nextBirthday - today;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+function calculateAge(birthday) {
+  const today = new Date();
+  const birthDate = new Date(birthday);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+function formatDate(dateStr) {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  const toastMessage = document.getElementById('toast-message');
+  toastMessage.textContent = message;
+  toast.classList.remove('hidden', 'opacity-0', 'translate-y-4');
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-y-4');
+    setTimeout(() => toast.classList.add('hidden'), 300);
+  }, 2000);
+}
+function createTimeline() {
+  const timelineContainer = document.getElementById('timeline');
+  timelineContainer.innerHTML = '';
+  const sortedBirthdays = [...birthdays].sort((a, b) => a.Tage - b.Tage);
+  sortedBirthdays.forEach(person => {
+    const isChecked = localStorage.getItem(`${person.Name}_gift`) === 'true';
+    const timelineItem = document.createElement('div');
+    timelineItem.className = `timeline-item ${isChecked ? 'highlight' : ''}`;
+    timelineItem.innerHTML = `
+      <div class="font-medium">${person.Name}</div>
+      <div class="text-sm">in ${person.Tage} Tagen</div>
+    `;
+    timelineItem.addEventListener('click', () => {
+      const card = document.getElementById(person.Name);
+      if (card) {
+        const cardRect = card.getBoundingClientRect();
+        const cardTop = cardRect.top + window.scrollY;
+        const scrollOffset = 220;
+        window.scrollTo({
+          top: cardTop - scrollOffset,
+          behavior: 'smooth'
+        });
+      }
+    });
+    timelineContainer.appendChild(timelineItem);
+  });
+}
+function createCard(person, index) {
+  const card = document.createElement('div');
+  const isChecked = localStorage.getItem(`${person.Name}_gift`) === 'true';
+  const notes = localStorage.getItem(`${person.Name}_notes`) || '';
+  card.className = `card bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 transition-all duration-300 hover:shadow-xl border-l-4 ${isChecked ? 'border-green-500 bg-green-100 dark:bg-green-900' : 'border-gray-300 dark:border-gray-600'}`;
+  card.style.animationDelay = `${index * 0.1}s`;
+  card.id = person.Name;
+  let genderSymbol;
+  if (person.Alter > 18) {
+    genderSymbol = person.Gender === 'M' ? '🧑💙' : '👩❤️';
+  } else {
+    genderSymbol = person.Gender === 'M' ? '👦🩵' : '👧🩷';
+  }
+  card.innerHTML = `
+    <div class="flex flex-col justify-between items-start mb-4">
+      <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <span class="text-blue-600 dark:text-blue-400">${person.Name} (${person.Alter} → ${person.Alter + 1})</span> ${genderSymbol}
+      </div>
+      <div class="text-sm text-gray-500 dark:text-gray-400 mt-2">Wird am <b>${formatDate(person.Geburtstag)} (in ${person.Tage} Tagen)</b> ${person.Alter + 1} Jahre alt</div>
+    </div>
+    <div class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+      <span class="font-medium">Eltern:</span> ${person.Eltern}
+    </div>
+    <div class="mb-4">
+      <label class="flex items-center space-x-2 cursor-pointer">
+        <input type="checkbox" id="${person.Name}_gift" class="hidden" ${isChecked ? 'checked' : ''} aria-label="Geschenkstatus für ${person.Name}">
+        <span class="gift-emoji ${isChecked ? 'checked text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}">🎁</span>
+        <span class="text-sm ${isChecked ? 'bg-green-500 text-white px-2 py-1 rounded' : ''}">${isChecked ? 'Geschenk erledigt' : 'Geschenk offen'}</span>
+      </label>
+    </div>
+    <div class="mb-2">
+      <textarea id="${person.Name}_notes" rows="2" class="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all duration-200 resize-vertical" placeholder="Geschenkideen & Notizen...">${notes}</textarea>
+    </div>
+  `;
+  // Handle gift checkbox
+  const checkbox = card.querySelector('input[type="checkbox"]');
+  const emoji = card.querySelector('.gift-emoji');
+  checkbox.addEventListener('change', function () {
+    localStorage.setItem(`${person.Name}_gift`, this.checked);
+    card.classList.toggle('border-green-500', this.checked);
+    card.classList.toggle('bg-green-100', this.checked);
+    card.classList.toggle('dark:bg-green-900', this.checked);
+    emoji.classList.toggle('checked', this.checked);
+    showToast(this.checked ? 'Geschenk als erledigt markiert' : 'Geschenk als offen markiert');
+    createTimeline();
+    if (this.checked) confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } });
+    renderList();
+  });
+  // Handle notes textarea
+  const notesField = card.querySelector('textarea');
+  notesField.addEventListener('input', function () {
+    localStorage.setItem(`${person.Name}_notes`, this.value);
+  });
+  return card;
+}
+function renderList(filter = '') {
+  // Update days and age
+  birthdays.forEach(person => {
+    person.Tage = calculateDays(person.Geburtstag);
+    person.Alter = calculateAge(person.Geburtstag);
+  });
+
+  // Sort by next birthday
+  birthdays.sort((a, b) => a.Tage - b.Tage);
+  localStorage.setItem('birthdays', JSON.stringify(birthdays));
+
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+
+  const lowerFilter = filter.toLowerCase();
+  const months = ['januar', 'februar', 'märz', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'dezember'];
+  
+  // Filtering logic remains the same for displaying the list
+  birthdays
+    .filter(person => {
+      if (!lowerFilter) return true; // Show all if filter is empty
+
+      const monthIndex = months.indexOf(lowerFilter);
+      if (monthIndex !== -1) {
+        const personMonth = new Date(person.Geburtstag).getMonth();
+        return personMonth === monthIndex;
+      }
+
+      const nameMatch = person.Name.toLowerCase().includes(lowerFilter);
+      const parentsMatch = person.Eltern.toLowerCase().includes(lowerFilter);
+      
+      // Special handling for "Julia", "Ronald & Julia"
+      if (lowerFilter === 'julia') {
+        return nameMatch || person.Eltern.toLowerCase().includes('julia');
+      }
+      if (lowerFilter === 'ronald') {
+        return nameMatch || person.Eltern.toLowerCase().includes('ronald');
+      }
+      if (lowerFilter === 'ronald & julia') {
+        return parentsMatch;
+      }
+
+      return nameMatch || parentsMatch;
+    })
+    .forEach((person, idx) => {
+      list.appendChild(createCard(person, idx));
+    });
+
+  createTimeline();
+}
+
+function getMonthName(monthIndex) {
+  const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  return months[monthIndex];
+}
+
+const searchInput = document.getElementById('search');
+const suggestionsDropdown = document.getElementById('suggestions-dropdown');
+const clearSearchButton = document.getElementById('clear-search');
+
+// --- New: Suggestion Functionality ---
+
+function generateSuggestions(query) {
+  const lowerQuery = query.toLowerCase();
+  const suggestions = {
+    names: [],
+    parents: [],
+    months: []
+  };
+
+  if (query.length === 0) {
+    return suggestions; // No suggestions for empty query
+  }
+
+  const uniqueNames = new Set();
+  const uniqueParents = new Set();
+  const uniqueMonths = new Set();
+
+  const monthsMap = {
+    'jan': 'Januar', 'feb': 'Februar', 'mär': 'März', 'apr': 'April', 'mai': 'Mai', 'jun': 'Juni',
+    'jul': 'Juli', 'aug': 'August', 'sep': 'September', 'okt': 'Oktober', 'nov': 'November', 'dez': 'Dezember'
+  };
+  const fullMonths = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+
+  // Names
+  birthdays.forEach(person => {
+    if (person.Name.toLowerCase().startsWith(lowerQuery) && !uniqueNames.has(person.Name)) {
+      suggestions.names.push(person.Name);
+      uniqueNames.add(person.Name);
+    }
+  });
+
+  // Parents
+  const allParents = new Set(birthdays.map(p => p.Eltern));
+  allParents.forEach(parentPair => {
+      if (parentPair && parentPair.toLowerCase().includes(lowerQuery) && !uniqueParents.has(parentPair)) {
+          suggestions.parents.push(parentPair);
+          uniqueParents.add(parentPair);
+      }
+  });
+
+  // Months
+  for (const [abbr, fullName] of Object.entries(monthsMap)) {
+    if (abbr.startsWith(lowerQuery) || fullName.toLowerCase().startsWith(lowerQuery)) {
+      if (!uniqueMonths.has(fullName)) {
+        suggestions.months.push(fullName);
+        uniqueMonths.add(fullName);
+      }
+    }
+  }
+  fullMonths.forEach(month => {
+    if (month.toLowerCase().startsWith(lowerQuery) && !uniqueMonths.has(month)) {
+      suggestions.months.push(month);
+      uniqueMonths.add(month);
+    }
+  });
+
+
+  // Limit to 5 suggestions per category
+  suggestions.names = suggestions.names.slice(0, 5);
+  suggestions.parents = suggestions.parents.slice(0, 5);
+  suggestions.months = suggestions.months.slice(0, 5);
+
+  return suggestions;
+}
+
+function displaySuggestions() {
+  const query = searchInput.value.trim();
+  suggestionsDropdown.innerHTML = ''; // Clear previous suggestions
+
+  if (query.length === 0) {
+    suggestionsDropdown.style.display = 'none';
+    suggestionsDropdown.classList.remove('show');
+    return;
+  }
+
+  const { names, parents, months } = generateSuggestions(query);
+  let hasSuggestions = false;
+
+  if (names.length > 0) {
+    const title = document.createElement('div');
+    title.className = 'suggestion-category-title';
+    title.innerHTML = '👤 Namen';
+    suggestionsDropdown.appendChild(title);
+    names.forEach(name => {
+      const div = document.createElement('div');
+      div.className = 'suggestion-item';
+      div.innerHTML = `<span class="emoji">👤</span>${name}`; // Add emoji
+      div.addEventListener('click', () => selectSuggestion(name));
+      suggestionsDropdown.appendChild(div);
+    });
+    hasSuggestions = true;
+  }
+
+  if (parents.length > 0) {
+    const title = document.createElement('div');
+    title.className = 'suggestion-category-title';
+    title.innerHTML = '👨‍👩‍👧‍👦 Eltern';
+    suggestionsDropdown.appendChild(title);
+    parents.forEach(parent => {
+      const div = document.createElement('div');
+      div.className = 'suggestion-item';
+      div.innerHTML = `<span class="emoji">👨‍👩‍👧‍👦</span>${parent}`; // Add emoji
+      div.addEventListener('click', () => selectSuggestion(parent));
+      suggestionsDropdown.appendChild(div);
+    });
+    hasSuggestions = true;
+  }
+
+  if (months.length > 0) {
+    const title = document.createElement('div');
+    title.className = 'suggestion-category-title';
+    title.innerHTML = '📅 Monate';
+    suggestionsDropdown.appendChild(title);
+    months.forEach(month => {
+      const div = document.createElement('div');
+      div.className = 'suggestion-item';
+      div.innerHTML = `<span class="emoji">📅</span>${month}`; // Add emoji
+      div.addEventListener('click', () => selectSuggestion(month));
+      suggestionsDropdown.appendChild(div);
+    });
+    hasSuggestions = true;
+  }
+
+  if (hasSuggestions) {
+    suggestionsDropdown.style.display = 'block';
+    // Use setTimeout to allow the display change to render before adding the class
+    setTimeout(() => {
+        suggestionsDropdown.classList.add('show');
+    }, 10);
+  } else {
+    suggestionsDropdown.classList.remove('show');
+    setTimeout(() => {
+        suggestionsDropdown.style.display = 'none';
+    }, 200); // Wait for transition to finish before hiding
+  }
+}
+
+function selectSuggestion(value) {
+  searchInput.value = value;
+  suggestionsDropdown.classList.remove('show');
+  setTimeout(() => {
+    suggestionsDropdown.style.display = 'none';
+  }, 200);
+  renderList(value); // Filter the list based on the selected suggestion
+  searchInput.focus(); // Keep focus on the input after selection
+}
+
+// Event Listeners for Search Input
+searchInput.addEventListener('input', function () {
+  const query = this.value;
+  if (query.length > 0) {
+    clearSearchButton.classList.remove('hidden');
+    displaySuggestions(); // Show suggestions as user types
+  } else {
+    clearSearchButton.classList.add('hidden');
+    suggestionsDropdown.classList.remove('show');
+    setTimeout(() => {
+        suggestionsDropdown.style.display = 'none';
+    }, 200);
+  }
+  renderList(query); // Always filter the list
+});
+
+searchInput.addEventListener('focus', () => {
+    // Only display suggestions on focus if there's already some input
+    if (searchInput.value.length > 0) {
+        displaySuggestions();
+    }
+});
+
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function (event) {
+  if (!searchInput.contains(event.target) && !suggestionsDropdown.contains(event.target)) {
+    suggestionsDropdown.classList.remove('show');
+    setTimeout(() => {
+        suggestionsDropdown.style.display = 'none';
+    }, 200);
+  }
+});
+
+clearSearchButton.addEventListener('click', function () {
+  searchInput.value = '';
+  this.classList.add('hidden');
+  suggestionsDropdown.classList.remove('show');
+  setTimeout(() => {
+    suggestionsDropdown.style.display = 'none';
+  }, 200);
+  renderList('');
+});
+
+renderList();
+
+// PWA: Service Worker (dynamic, single-file)
+if ('serviceWorker' in navigator) {
+  const swContent = `
+    const CACHE_NAME = 'geburtstagsmanager-v1';
+    self.addEventListener('install', event => {
+      event.waitUntil(
+        caches.open(CACHE_NAME).then(cache => cache.addAll(['/', location.pathname]))
+      );
+    });
+    self.addEventListener('fetch', event => {
+      event.respondWith(
+        fetch(event.request).catch(() => caches.match(event.request))
+      );
+    });
+  `;
+  const swBlob = new Blob([swContent], { type: 'text/javascript' });
+  const swUrl = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swUrl);
+}
+
+// PWA: Manifest (dynamic, single-file)
+function createManifest() {
+  // Simple SVG icon, base64
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192"><rect width="100%" height="100%" rx="32" fill="#3b82f6"/><text x="50%" y="55%" text-anchor="middle" font-size="90" font-family="Segoe UI,Arial" fill="#fff">🎂</text></svg>`;
+  const iconBase64 = btoa(unescape(encodeURIComponent(svg)));
+  const manifestContent = {
+    name: 'Geburtstagsmanager',
+    short_name: 'Geburtstage',
+    start_url: '.',
+    display: 'standalone',
+    background_color: '#f0f4f8',
+    theme_color: '#3b82f6',
+    icons: [
+      {
+        src: 'data:image/svg+xml;base64,' + iconBase64,
+        sizes: '192x192',
+        type: 'image/svg+xml'
+      }
+    ]
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifestContent)], { type: 'application/json' });
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = URL.createObjectURL(manifestBlob);
+  document.head.appendChild(link);
+}
+createManifest();
+
+// PWA: Install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallButton();
+});
+function showInstallButton() {
+  if (document.getElementById('install-btn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'install-btn';
+  btn.textContent = 'App installieren';
+  btn.className = 'fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg z-50';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        showToast('App installiert!');
+      }
+      deferredPrompt = null;
+      btn.remove();
+    }
+  });
+  document.body.appendChild(btn);
+}
+window.addEventListener('appinstalled', () => {
+  showToast('App installiert!');
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.remove();
+});
+</script>
+</body>
+</html>
